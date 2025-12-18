@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Avengers: Doomsday Dominates Every State — Vegas Insider</title>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
+
+<style>
+:root{
+  --page:#F7F4EF;
+  --ink:#0b1220;
+  --muted:#6b7280;
+  --bd:rgba(0,0,0,.08);
+  --radius:16px;
+  --shadow:0 18px 42px rgba(0,0,0,.10);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--page);
+  color:var(--ink);
+  font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial,sans-serif;
+  display:flex;
+  justify-content:center;
+  padding:18px;
+}
+.wrap{width:min(1100px,100%)}
+
+header{text-align:center;margin:0 0 12px}
+h1{
+  margin:0;
+  font-size:clamp(1.6rem,1.1rem + 2vw,2.3rem);
+  font-weight:950;
+  letter-spacing:-.03em;
+}
+.sub{
+  margin:6px auto 0;
+  max-width:860px;
+  color:var(--muted);
+  font-size:.95rem;
+}
+
+.frame{
+  background:linear-gradient(#fff,#fffaf2);
+  border:1px solid var(--bd);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  overflow:hidden;
+}
+
+/* --- map area --- */
+.map-wrap{
+  position:relative;
+  padding:12px;
+  overflow:hidden;
+  background:
+    radial-gradient(1200px 500px at 50% -40px, rgba(0,0,0,.04), transparent 65%),
+    linear-gradient(135deg,#fffdf7,#f7f2e9);
+}
+
+#map{position:relative; z-index:2;}
+svg{width:100%;height:auto;display:block}
+
+/* Watermark overlay ON TOP of the SVG */
+.map-watermark{
+  position:absolute;
+  inset:0;
+  z-index:3;
+  pointer-events:none;
+
+  background:
+    radial-gradient(980px 460px at 50% 46%, rgba(245,158,11,.14), transparent 62%),
+    url("https://upload.wikimedia.org/wikipedia/commons/c/c4/Avengers_Doomsday_logo.png")
+      center/520px no-repeat;
+
+  opacity:.10;                 /* slightly lighter than before */
+  filter:blur(0.55px) saturate(1.08);
+  mix-blend-mode:multiply;
+}
+
+.legend{
+  display:flex;
+  justify-content:center;
+  gap:14px;
+  padding:10px 0 6px;
+  font-size:13px;
+  color:var(--muted);
+}
+.swatch{width:18px;height:10px;border-radius:6px;display:inline-block}
+
+.logoRow{
+  padding:12px 0;
+  display:flex;
+  justify-content:center;
+  background:#fffaf3;
+  border-top:1px solid var(--bd);
+}
+.logoRow img{
+  height:44px;
+  filter:drop-shadow(0 2px 3px rgba(0,0,0,.18));
+}
+
+/* Tooltip above everything */
+.tooltip{
+  position:fixed;
+  z-index:999999;
+  pointer-events:none;
+  background:#fffdf7;
+  border:1px solid rgba(0,0,0,.10);
+  border-radius:10px;
+  box-shadow:0 12px 26px rgba(0,0,0,.18);
+  padding:8px 10px;
+  font-size:13px;
+  display:none;
+}
+.tooltip strong{display:block;font-weight:900;margin-bottom:2px}
+</style>
+</head>
+
+<body>
+<div class="wrap">
+  <header>
+    <h1>Avengers: Doomsday Dominates Every State</h1>
+    <p class="sub">Heatmap shows monthly searches per 100,000 residents (higher = more “Avengers-obsessed”).</p>
+  </header>
+
+  <div class="frame">
+    <div class="map-wrap">
+      <svg id="map" viewBox="0 0 975 610" aria-label="U.S. map showing Avengers enthusiasm by state"></svg>
+      <div class="map-watermark" aria-hidden="true"></div>
+    </div>
+
+    <div class="legend">
+      <span class="swatch" style="background:#fff2c2"></span><span>Lower enthusiasm</span>
+      <span class="swatch" style="background:#991b1b"></span><span>Higher enthusiasm</span>
+    </div>
+
+    <div class="logoRow">
+      <img src="https://i.postimg.cc/nLWxFkC4/download.png" alt="Vegas Insider">
+    </div>
+  </div>
+</div>
+
+<div id="tooltip" class="tooltip"></div>
+
+<script>
+/* ---------- Data: Avengers searches per 100K ---------- */
+const DATA = {
+  "Alabama":191.9,"Alaska":175.6,"Arizona":238.7,"Arkansas":174.9,"California":279.0,
+  "Colorado":203.1,"Connecticut":220.4,"Delaware":228.2,"Florida":211.8,"Georgia":242.4,
+  "Hawaii":200.5,"Idaho":179.9,"Illinois":260.4,"Indiana":213.7,"Iowa":166.6,
+  "Kansas":181.8,"Kentucky":176.5,"Louisiana":176.2,"Maine":170.8,"Maryland":236.3,
+  "Massachusetts":207.4,"Michigan":218.9,"Minnesota":170.9,"Mississippi":149.5,
+  "Missouri":193.7,"Montana":140.7,"Nebraska":179.5,"Nevada":247.9,"New Hampshire":170.3,
+  "New Jersey":233.7,"New Mexico":206.5,"New York":249.2,"North Carolina":201.0,
+  "North Dakota":163.2,"Ohio":186.8,"Oklahoma":197.8,"Oregon":189.6,"Pennsylvania":207.2,
+  "Rhode Island":170.8,"South Carolina":180.7,"South Dakota":173.0,"Tennessee":204.8,
+  "Texas":236.5,"Utah":282.6,"Vermont":154.2,"Virginia":250.3,"Washington":227.4,
+  "West Virginia":140.2,"Wisconsin":166.1,"Wyoming":170.2
+};
+
+/* ---------- Map render ---------- */
+const svg = d3.select("#map");
+const tooltip = d3.select("#tooltip");
+const width = 975, height = 610;
+
+const projection = d3.geoAlbersUsa().scale(1300).translate([width/2, height/2]);
+const path = d3.geoPath(projection);
+
+const values = Object.values(DATA);
+
+/* Warm editorial scale */
+const color = d3.scaleQuantile()
+  .domain(values)
+  .range(["#fff2c2","#fee59a","#f8c86a","#f29b4b","#e26f3a","#c6452f","#991b1b"]);
+
+d3.json("https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json").then(us => {
+  const states = topojson.feature(us, us.objects.states).features;
+  const g = svg.append("g");
+
+  const layer = g.selectAll("g.state")
+    .data(states)
+    .join("g")
+    .attr("class","state");
+
+  layer.append("path")
+    .attr("class","fill")
+    .attr("d", path)
+    .attr("fill", d => {
+      const v = DATA[d.properties.name];
+      return v ? color(v) : "#f2f2f2";
+    });
+
+  layer.append("path")
+    .attr("d", path)
+    .attr("fill","none")
+    .attr("stroke","#fff")
+    .attr("stroke-width",1.1)
+    .attr("stroke-linejoin","round");
+
+  layer.append("path")
+    .attr("d", path)
+    .attr("fill","none")
+    .attr("stroke","#000")
+    .attr("stroke-opacity",0.06)
+    .attr("stroke-width",1.6)
+    .attr("stroke-linejoin","round")
+    .attr("pointer-events","none");
+
+  /* Hover outline ON TOP */
+  layer.append("path")
+    .attr("class","hover-outline")
+    .attr("d", path)
+    .attr("fill","none")
+    .attr("stroke","#5a3417")     /* warmer outline */
+    .attr("stroke-opacity",0)
+    .attr("stroke-width",7)
+    .attr("stroke-linejoin","round")
+    .attr("pointer-events","none");
+
+  /* Invisible hit area */
+  layer.append("path")
+    .attr("class","hit")
+    .attr("d", path)
+    .attr("fill","none")
+    .attr("stroke","transparent")
+    .attr("stroke-width",10)
+    .style("pointer-events","stroke");
+
+  layer.on("mousemove", (event, d) => {
+      const v = DATA[d.properties.name];
+      if (!v) { tooltip.style("display","none"); return; }
+
+      tooltip.style("display","block").html(
+        `<strong>${d.properties.name}</strong>
+         Avengers: Doomsday<br>
+         <span style="color:#111;font-weight:800">${v.toFixed(1)}</span> searches per 100K`
+      );
+
+      const r = tooltip.node().getBoundingClientRect();
+      let x = event.clientX + 12;
+      let y = event.clientY + 12;
+      x = Math.min(x, window.innerWidth - r.width - 10);
+      y = Math.min(y, window.innerHeight - r.height - 10);
+      tooltip.style("left", x + "px").style("top", y + "px");
+
+      d3.select(event.currentTarget).select(".hover-outline").attr("stroke-opacity", .18);
+    })
+    .on("mouseout", (event) => {
+      tooltip.style("display","none");
+      d3.select(event.currentTarget).select(".hover-outline").attr("stroke-opacity", 0);
+    });
+});
+</script>
+</body>
+</html>
